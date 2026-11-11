@@ -1,0 +1,87 @@
+name: dev-env-cc
+
+services:
+  dev:
+    extends:
+      file: assets/compose.images.yaml
+      service: docker-${INSTALL_DOCKER_CLI:-false}
+
+    # 固定使用 Dockerfile 的 root 分支：容器内的 Codex 需要写入
+    # /agent-data/codex，dev 用户与宿主机挂载目录的 UID 不一致时会提示
+    # 没有权限创建。root 不受目录属主限制。
+    # 需要恢复 dev 用户时，把 target 改回 ${USER_MODE:-dev}-docker-... 并删掉 image。
+    #image: daily-dev:root
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ${USER_MODE:-dev}-docker-${INSTALL_DOCKER_CLI:-false}
+      network: ${BUILD_NETWORK:-default}
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION:-3.12-bookworm}
+        NODE_VERSION: ${NODE_VERSION:-24-bookworm-slim}
+        UV_VERSION: ${UV_VERSION:-0.12.5}
+        CODEX_VERSION: ${CODEX_VERSION:-0.166.0}
+        DOCKER_CLI_VERSION: ${DOCKER_CLI_VERSION:-28.5.1-cli}
+        USER_UID: ${USER_UID:-1000}
+        USER_GID: ${USER_GID:-1000}
+        IN_MAINLAND: ${IN_MAINLAND:-false}
+
+    hostname: container
+    extra_hosts:
+      - "container:127.0.1.1"
+    init: true
+    stdin_open: true
+    tty: true
+    environment:
+      back_http_proxy: ${http_proxy:-}
+      back_https_proxy: ${https_proxy:-}
+      back_no_proxy: ${no_proxy:-}
+      SSH_PUBLIC_KEY: ${SSH_PUBLIC_KEY:-}
+    ports:
+      - "${SSH_BIND_IP:-127.0.0.1}:${SSH_HOST_PORT:-2222}:22"
+
+    # Add the docker group to the container, link the docker socket.
+    group_add:
+      - "${DOCKER_GID}"
+    volumes:
+      - type: bind
+        source: ${SSH_SOURCE_DIR:-${HOME}/.ssh}
+        target: /opt/ssh-src
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${AGENT_BIN_DIR:-./agent-bin}
+        target: /opt/agent-bin-src
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        bind:
+          create_host_path: false
+
+     # Agent data uses fixed targets.
+      - type: bind
+        source: ${CLAUDE_DATA_DIR}
+        target: /agent-data/claude
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${CODEX_DATA_DIR}
+        target: /agent-data/codex
+        bind:
+          create_host_path: false
+    # dev_dir
+      - type: bind
+        source: ${PROJ_DIR}
+        target: /workspace/dev-proj
+        bind:
+          create_host_path: false
+
+      - type: bind
+        source: /data01/liuzhiyuan-dev/dev-env-codex/dev_proj
+        target: /data01/liuzhiyuan-dev/dev-env-codex/dev_proj
+        bind:
+          create_host_path: false

@@ -1,0 +1,4 @@
+/data/*
+/agent-bin/*
+/dev_proj/*
+.DS_Store
